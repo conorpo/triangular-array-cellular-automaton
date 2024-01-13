@@ -17,7 +17,6 @@ export async function setupIterateStage(device, shared_resources) {
         code: iterate_shader_src
     });
 
-
     iterate_stage.pingpong_bindgroup_layout = device.createBindGroupLayout({
         entries: [
             {

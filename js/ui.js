@@ -10,5 +10,11 @@ import * as dat from 'dat.gui';
  * @returns {dat.GUI} The dat.GUI instance.
 */
 export function setupUI() {
-    return new dat.GUI();
+    const gui = new dat.GUI({
+        name: 'Cellular Automata'
+    });
+
+    gui.width = 200;
+
+    return gui;
 }

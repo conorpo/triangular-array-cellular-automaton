@@ -2,6 +2,7 @@ import { setupUI } from './ui.js';
 
 import { setupSharedResources } from './shared_resources.js';
 import { setupIterateStage } from './stages/iterate.js';
+import { setupRenderStage } from './stages/render.js';
 
 
 import Stats from 'stats.js';
@@ -10,6 +11,7 @@ async function init() {
   const { adapter, device, presentation_format } = await initWebGPU();
 
   const canvas = document.getElementById('webgpu_canvas');
+  canvas.style.imageRendering = 'pixelated';
   const context = canvas.getContext('webgpu');
   if (!context) throw ReferenceError('WebGPU not supported');
   context.configure({
@@ -25,10 +27,12 @@ async function init() {
   //const mouse_info = await setupMouse();
 
   //const rule_generator_stage = await setupRuleGenerator(device, shared_resources);
-  const iterate_stage = await setupIterateStage(device, shared_resources);
+  //const iterate_stage = await setupIterateStage(device, shared_resources);
+  const render_stage = await setupRenderStage(device, shared_resources, presentation_format);
 
   // Perf 
   const stats = new Stats();
+  stats.dom.classList.add('taeca-stats');
   document.body.appendChild(stats.dom);
 
   /**
@@ -41,12 +45,14 @@ async function init() {
     const height = Math.max(1, Math.min(device.limits.maxTextureDimension2D, canvas.clientHeight));
 
     if (canvas.width === width && canvas.height === height) return false;
-    config.outputWidth = canvas.width = width;
-    config.outputHeight = canvas.height = height;
+    canvas.width = width;
+    canvas.height = height;
 
     console.log(`Resized canvas to ${width}x${height}`);
     
-    renderingStage.createDepthTexture();
+    // I don't think we need a depth texture
+    //renderingStage.createDepthTexture(); 
+
     return true;
   }
 
@@ -61,23 +67,37 @@ async function init() {
 
 
     const encoder = device.createCommandEncoder({label: 'Frame Command Encoder'});
-    const compute_pass = encoder.beginComputePass({label: 'Iterate Pass'});
+    //const compute_pass = encoder.beginComputePass({label: 'Iterate Pass'});
 
     // Setup Rule
 
     // Iterate Until Done
-    compute_pass.setPipeline(iterate_stage.pipeline);
+    //compute_pass.setPipeline(iterate_stage.pipeline);
     // for(let i = 0; i < 500; i++) {
     //   compute_pass.setBindGroup(0, iterate_stage.bindgroups[i % 2]);
     //   compute_pass.setBindGroup(1, iterate_stage.bindgroups[i % 2]);
     //   compute_pass.dispatchWorkgroups(500, 1, 1);
     // }
 
-
     // Render
+    render_stage.render_pass_descriptor.colorAttachments[0].view = context.getCurrentTexture().createView();
+    const render_pass = encoder.beginRenderPass(render_stage.render_pass_descriptor);
+
+    render_pass.setPipeline(render_stage.render_pipeline);
+    render_pass.setBindGroup(0, render_stage.bindgroup);
+    render_pass.draw(6);
+
+    render_pass.end();
+
+    const commandBuffer = encoder.finish();
+    device.queue.submit([commandBuffer]);
 
     stats.end();
+
+    requestAnimationFrame(render);
   }
+
+  requestAnimationFrame(render);
 }
 
 async function initWebGPU() {
