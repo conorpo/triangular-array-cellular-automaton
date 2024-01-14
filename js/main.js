@@ -168,7 +168,7 @@ async function initWebGPU() {
 
 // Entry point
 try {
-  await init();
+  init();
 } catch (e) {
   console.error(e);
   alert(e);
