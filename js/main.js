@@ -19,16 +19,16 @@ async function init() {
     format: presentation_format
   });
 
-  // Initialze UI prior to populating resources
-  const gui = await setupUI();
-
   // Setup Resources and Stages
-  const shared_resources = await setupSharedResources(device, gui);
+  const shared_resources = await setupSharedResources(device);
   //const mouse_info = await setupMouse();
-
+  
   //const rule_generator_stage = await setupRuleGenerator(device, shared_resources);
-  //const iterate_stage = await setupIterateStage(device, shared_resources);
+  const iterate_stage = await setupIterateStage(device, shared_resources);
   const render_stage = await setupRenderStage(device, shared_resources, presentation_format);
+  
+  // Initialze UI prior to populating resources
+  const gui = await setupUI(shared_resources, iterate_stage);
 
   // Perf 
   const stats = new Stats();
@@ -67,17 +67,21 @@ async function init() {
 
 
     const encoder = device.createCommandEncoder({label: 'Frame Command Encoder'});
-    //const compute_pass = encoder.beginComputePass({label: 'Iterate Pass'});
+    const compute_pass = encoder.beginComputePass({label: 'Iterate Pass'});
 
     // Setup Rule
 
     // Iterate Until Done
-    //compute_pass.setPipeline(iterate_stage.pipeline);
-    // for(let i = 0; i < 500; i++) {
-    //   compute_pass.setBindGroup(0, iterate_stage.bindgroups[i % 2]);
-    //   compute_pass.setBindGroup(1, iterate_stage.bindgroups[i % 2]);
-    //   compute_pass.dispatchWorkgroups(500, 1, 1);
-    // }
+    compute_pass.setPipeline(iterate_stage.iterate_pipeline);
+    compute_pass.setBindGroup(0, iterate_stage.get_iterate_bindgroup());
+    for(let i = 0; i < 100; i++) {
+      compute_pass.setBindGroup(1, iterate_stage.pingpong_bindgroups[i % 2]);
+      compute_pass.dispatchWorkgroups(8);
+    }
+    //console.log("Done");
+
+    compute_pass.end();
+
 
     // Render
     render_stage.render_pass_descriptor.colorAttachments[0].view = context.getCurrentTexture().createView();
@@ -96,7 +100,7 @@ async function init() {
 
     requestAnimationFrame(render);
   }
-
+  console.log(shared_resources.cpu_ruleset_buffer);
   requestAnimationFrame(render);
 }
 

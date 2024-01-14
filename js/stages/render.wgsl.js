@@ -26,7 +26,7 @@ const quad_verts = array<vec2<f32>, 6>(
     if(state.r == 0u) {
         return vec4<f32>(1.0, 1.0, 1.0, 1.0);
     } else {
-        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        return vec4<f32>((f32(state.r)/6), 0.0, 0.0, 1.0);
     }
 }
 `

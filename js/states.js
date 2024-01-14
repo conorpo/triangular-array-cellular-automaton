@@ -17,7 +17,7 @@
  * @returns {ValueGenerator} The state generator.
  */
 export function test_ruleset(k) {
-    const rule = 6;
+    const rule = 7;
     const rule_set = rule.toString(k).padStart(4,'0').split('').map((x) => parseInt(x)).reverse();
 
     return (index) => {
