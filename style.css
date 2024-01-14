@@ -35,5 +35,5 @@ body {
 }
 
 .taeca-stats {
-  border-bottom: var(--ui_border);
+  //border-bottom: var(--ui_border);
 }

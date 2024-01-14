@@ -1,5 +1,7 @@
 import { iterate_shader_src } from './iterate.wgsl.js';
 
+import { global_emitter } from '../events.js';
+
 /**
  * @module iterate
 */
@@ -17,35 +19,43 @@ export async function setupIterateStage(device, shared_resources) {
         code: iterate_shader_src
     });
 
-    iterate_stage.iterate_settings_buffer = device.createBuffer({
+    iterate_stage.iterate_settings = {
+        current_row: 0,
+    }
+
+    const iterate_settings_buffer_descriptor = device.createBuffer({
         label: "Iterate Settings Buffer",
         size: 4,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
-    // Temp?
-    iterate_stage.reset = () => {
-        device.queue.writeBuffer(iterate_stage.iterate_settings_buffer, 0, new Uint32Array([0]));
+    iterate_stage.iterate_settings_buffers = Array(parseInt(import.meta.env.VITE_CA_TEXTURE_COUNT)).fill().map(() => { return device.createBuffer(iterate_settings_buffer_descriptor); });
+
+    iterate_stage.update_iterate_settings_buffer = function() {
+        device.queue.writeBuffer(
+            iterate_stage.iterate_settings_buffers[0],
+            0,
+            new Uint32Array([iterate_stage.iterate_settings.current_row])
+        );
+    }
+    
+    iterate_stage.reset = function() {
+        iterate_stage.iterate_settings.current_row = 0;
+        iterate_stage.update_iterate_settings_buffer();
     }
 
-    iterate_stage.iterate_bindgroup_layout = device.createBindGroupLayout({
+    iterate_stage.rule_bindgroup_layout = device.createBindGroupLayout({
+        label: "Rule Bindgroup Layout",
         entries: [
             {
                 binding: 0,
-                visibility: GPUShaderStage.COMPUTE,
-                buffer: {
-                    type: 'storage'
-                }
-            },
-            {
-                binding: 1,
                 visibility: GPUShaderStage.COMPUTE,
                 buffer: {
                     type: 'uniform'
                 }
             },
             {
-                binding: 2,
+                binding: 1,
                 visibility: GPUShaderStage.COMPUTE,
                 buffer: {
                     type: 'read-only-storage'
@@ -55,39 +65,33 @@ export async function setupIterateStage(device, shared_resources) {
     });
 
     // This is kind of hacky but I would have to refactor everything from the ground up to fix it
-    let memo_loc = false;
     iterate_stage.iterate_bindgroup = null;
 
-    iterate_stage.get_iterate_bindgroup = () => {
-        if(shared_resources.ruleset_buffer === memo_loc) return iterate_stage.iterate_bindgroup;
-        memo_loc = shared_resources.ruleset_buffer;
-        return iterate_stage.iterate_bindgroup = device.createBindGroup({
-            layout: iterate_stage.iterate_bindgroup_layout,
+    function create_iterate_bindgroup() {
+        iterate_stage.iterate_bindgroup = device.createBindGroup({
+            layout: iterate_stage.rule_bindgroup_layout,
             entries: [
                 {
                     binding: 0,
-                    resource: {
-                        buffer: iterate_stage.iterate_settings_buffer
-                    }
-                },
-                {
-                    binding: 1,
                     resource: {
                         buffer: shared_resources.rule_info_buffer
                     }
                 },
                 {
-                    binding: 2,
+                    binding: 1,
                     resource: {
                         buffer: shared_resources.ruleset_buffer
                     }
                 }
             ]
         });
-    }
+    };
+    create_iterate_bindgroup();
+    global_emitter.on('ruleset_buffer_created', create_iterate_bindgroup);
 
 
     iterate_stage.pingpong_bindgroup_layout = device.createBindGroupLayout({
+        label: "Pingpong Bindgroup Layout",
         entries: [
             {
                 binding: 0,
@@ -100,16 +104,30 @@ export async function setupIterateStage(device, shared_resources) {
             {
                 binding: 1,
                 visibility: GPUShaderStage.COMPUTE,
+                buffer: {
+                    type: 'read-only-storage'
+                }
+            },
+            {
+                binding: 2,
+                visibility: GPUShaderStage.COMPUTE,
                 storageTexture: {
                     access: 'write-only',
                     format: 'r32uint',
                     viewDimension: '2d'
                 }
             },
+            {
+                binding: 3,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {
+                    type: 'storage'
+                }
+            }
         ]
     });
 
-    const n = shared_resources.ca_textures.length; // Number of ping-pong textures
+    const n = parseInt(import.meta.env.VITE_CA_TEXTURE_COUNT);
     iterate_stage.pingpong_bindgroups = [];
 
     for(let i = 0; i < n; i++) {
@@ -122,15 +140,28 @@ export async function setupIterateStage(device, shared_resources) {
                 },
                 {
                     binding: 1,
+                    resource: {
+                        buffer: iterate_stage.iterate_settings_buffers[i]
+                    }
+                },
+                {
+                    binding: 2,
                     resource: shared_resources.ca_textures[(i + 1) % n].createView()
+                },
+                {
+                    binding: 3,
+                    resource: {
+                        buffer: iterate_stage.iterate_settings_buffers[(i + 1) % n]
+                    }
                 }
             ]
         }));
     }
 
     const iterate_pipeline_layout = device.createPipelineLayout({
+        label: "Iterate Pipeline Layout",
         bindGroupLayouts: [
-            iterate_stage.iterate_bindgroup_layout,
+            iterate_stage.rule_bindgroup_layout,
             iterate_stage.pingpong_bindgroup_layout
         ]
     });

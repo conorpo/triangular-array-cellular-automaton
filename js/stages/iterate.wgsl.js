@@ -5,20 +5,22 @@ struct RuleSettings {
 };
 
 struct IterateSettings {
-    current_row: atomic<u32>
+    current_row: u32
 };
 
-@group(0) @binding(0) var<storage, read_write> iterate_settings: IterateSettings;
-@group(0) @binding(1) var<uniform> rule_settings: RuleSettings;
-@group(0) @binding(2) var<storage, read> ruleset: array<u32>;
+
+@group(0) @binding(0) var<uniform> rule_settings: RuleSettings;
+@group(0) @binding(1) var<storage, read> ruleset: array<u32>;
 
 @group(1) @binding(0) var input_texture: texture_2d<u32>;
-@group(1) @binding(1) var output_texture: texture_storage_2d<r32uint, write>;
+@group(1) @binding(1) var<storage, read> input_iterate_settings: IterateSettings;
+@group(1) @binding(2) var output_texture: texture_storage_2d<r32uint, write>;
+@group(1) @binding(3) var<storage, read_write> output_iterate_settings: IterateSettings;
 
 @compute @workgroup_size(64) fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
-    let row = atomicLoad(&iterate_settings.current_row);
+    let row = input_iterate_settings.current_row;
     let col = global_id.x;
 
     // Copy the current row to the output texture
@@ -38,7 +40,8 @@ struct IterateSettings {
     let state = ruleset[rule_index];
     textureStore(output_texture, vec2u(col, row+1), vec4u(state,0,0,0));
 
-    storageBarrier();
-    atomicStore(&iterate_settings.current_row, row+1);
+    if(col == 0) {
+        output_iterate_settings.current_row = row+1;
+    }
 }
 `

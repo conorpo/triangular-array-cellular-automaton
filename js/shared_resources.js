@@ -1,5 +1,7 @@
 import { random_state, single_1, test_ruleset } from './states.js';
 
+import { global_emitter } from './events.js';
+
 /**
  * @module shared_resources
 */
@@ -18,14 +20,18 @@ export async function setupSharedResources(device) {
      * @type {GPUTextureDescriptor}
      * @todo Make the data type a 4 byte packed int maybe, also try as a buffer (maybe can avoid ping-ponging)
     */
+    const [ca_width, ca_height] = [parseInt(import.meta.env.VITE_CA_TEXTURE_WIDTH), parseInt(import.meta.env.VITE_CA_TEXTURE_HEIGHT)];
+
     const ca_texture_descriptor = {
-        size: [512, 512],
+        size: [ca_width, ca_height],
         format: 'r32uint',
         dimension: '2d',
         usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
     };
 
-    shared_resources.ca_textures = [device.createTexture(ca_texture_descriptor), device.createTexture(ca_texture_descriptor)];
+    shared_resources.ca_textures = Array(parseInt(import.meta.env.VITE_CA_TEXTURE_COUNT)).fill(0).map(() => device.createTexture(ca_texture_descriptor));
+
+    console.log(shared_resources.ca_textures)
 
 
     shared_resources.rule_info_buffer = device.createBuffer({
@@ -79,7 +85,7 @@ export async function setupSharedResources(device) {
      * @param {ValueGenerator} value_generator A function that takes the index of the value to generate and returns the value.
     */
     shared_resources.initialize_ca_texture = (value_generator) => {
-        const top_row = new Uint32Array(shared_resources.ca_textures[0].width);
+        const top_row = new Uint32Array(ca_width);
         for(let i = 0; i < top_row.length; i++) {
             top_row[i] = value_generator(i);
         }
@@ -87,7 +93,7 @@ export async function setupSharedResources(device) {
         device.queue.writeTexture({
             texture: shared_resources.ca_textures[0],
         }, top_row, {}, {
-            width: shared_resources.ca_textures[0].width,
+            width: ca_width,
             height: 1
         });
     };
@@ -107,10 +113,11 @@ export async function setupSharedResources(device) {
         // rule_info_folder.domElement.children[0].children[0].innerText = "Rule Info";
 
         // Update the initial row of the CA texture, this is a command on the queue, so changes aren't immediate.
-        shared_resources.initialize_ca_texture(single_1(shared_resources.rule_info.k, shared_resources.ca_textures[0].width));
+        shared_resources.initialize_ca_texture(single_1(shared_resources.rule_info.k, ca_width));
 
         // Create the new ruleset buffer
         shared_resources.create_ruleset_buffer(size);
+        global_emitter.emit('ruleset_buffer_created');
         shared_resources.update_ruleset_buffer(random_state(shared_resources.rule_info.k)); // Same thing for this one
 
         // Finally Update the rule info buffer

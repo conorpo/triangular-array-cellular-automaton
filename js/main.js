@@ -30,11 +30,6 @@ async function init() {
   // Initialze UI prior to populating resources
   const gui = await setupUI(shared_resources, iterate_stage);
 
-  // Perf 
-  const stats = new Stats();
-  stats.dom.classList.add('taeca-stats');
-  document.body.appendChild(stats.dom);
-
   /**
    * Check if the canvas has been resized, re-create the depth texture if so.
    * @function resizeIfNeeded
@@ -56,32 +51,73 @@ async function init() {
     return true;
   }
 
-  let lastTime = 0;
-  async function render(time) {
-    const delta = time - lastTime;
-    lastTime = time;
+  const workgroups = parseInt(import.meta.env.VITE_CA_TEXTURE_WIDTH) / 64;
+
+  // Perf 
+  const stats = new Stats();
+  stats.dom.classList.add('taeca-stats');
+  
+  const debugTimings = {};
+  if(import.meta.env.VITE_TIMESTAMPS === "true") {
+    debugTimings.querySet = device.createQuerySet({
+      type: 'timestamp',
+      count: 3, //Initial, After Iteration, After Render
+    });
+    
+    debugTimings.timestampBuffer = device.createBuffer({
+      label: 'Timestamp Buffer',
+      size: 3 * 8,
+      usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE,
+    });
+    
+    debugTimings.timestampReadBuffer = device.createBuffer({
+      label: 'Timestamp Read Buffer',
+      size: 3 * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });  
+    
+    stats.iteration = stats.addPanel(new Stats.Panel('µs Iteration', '#ff8', '#221'));
+    stats.render = stats.addPanel(new Stats.Panel('µs Render', '#f8f', '#212'));
+
+    render_stage.render_pass_descriptor.timestampWrites = {
+      querySet: debugTimings.querySet,
+      endOfPassWriteIndex: 2
+    }
+  };
+  
+  document.body.appendChild(stats.dom);
+  
+  async function render() {
     stats.begin();
 
     // Check for window resize, re create depth texture if so
     resizeIfNeeded();
 
-
     const encoder = device.createCommandEncoder({label: 'Frame Command Encoder'});
-    const compute_pass = encoder.beginComputePass({label: 'Iterate Pass'});
 
-    // Setup Rule
+    if(iterate_stage.iterate_settings.current_row < parseInt(import.meta.env.VITE_CA_TEXTURE_HEIGHT)) {
+      // Compute
+      const compute_pass = encoder.beginComputePass({
+        label: 'Iterate Pass',
+        timestampWrites: (import.meta.env.VITE_TIMESTAMPS === "true") ? {
 
-    // Iterate Until Done
-    compute_pass.setPipeline(iterate_stage.iterate_pipeline);
-    compute_pass.setBindGroup(0, iterate_stage.get_iterate_bindgroup());
-    for(let i = 0; i < 100; i++) {
-      compute_pass.setBindGroup(1, iterate_stage.pingpong_bindgroups[i % 2]);
-      compute_pass.dispatchWorkgroups(8);
+          querySet: debugTimings.querySet,
+          beginningOfPassWriteIndex: 0,
+          endOfPassWriteIndex: 1
+        } : undefined
+      });
+
+      compute_pass.setPipeline(iterate_stage.iterate_pipeline);
+      compute_pass.setBindGroup(0, iterate_stage.iterate_bindgroup);
+      
+      for(let i = 0; i < parseInt(import.meta.env.VITE_MAX_ITERATIONS_PER_FRAME); i++) {
+        compute_pass.setBindGroup(1, iterate_stage.pingpong_bindgroups[i % 2]);
+        compute_pass.dispatchWorkgroups(workgroups);
+        iterate_stage.iterate_settings.current_row++;
+      }
+
+      compute_pass.end();
     }
-    //console.log("Done");
-
-    compute_pass.end();
-
 
     // Render
     render_stage.render_pass_descriptor.colorAttachments[0].view = context.getCurrentTexture().createView();
@@ -93,23 +129,36 @@ async function init() {
 
     render_pass.end();
 
+    if(import.meta.env.VITE_TIMESTAMPS === "true"){
+      encoder.resolveQuerySet(debugTimings.querySet, 0, 3, debugTimings.timestampBuffer, 0);
+      encoder.copyBufferToBuffer(debugTimings.timestampBuffer, 0, debugTimings.timestampReadBuffer, 0, 3 * 8);
+    }
+
     const commandBuffer = encoder.finish();
     device.queue.submit([commandBuffer]);
 
-    stats.end();
+    if(import.meta.env.VITE_TIMESTAMPS === "true") {
+      await debugTimings.timestampReadBuffer.mapAsync(GPUMapMode.READ)
+      const timestamps = new BigUint64Array(debugTimings.timestampReadBuffer.getMappedRange());
+      debugTimings.timestampReadBuffer.unmap();
+      console.log(timestamps[0], timestamps[1], timestamps[2]);
+      stats.iteration.update(Number(timestamps[1] - timestamps[0]) / 1000, 1000);
+      stats.render.update(Number(timestamps[2] - timestamps[1]) / 1000, 1000);
+    }
 
+    stats.end();
     requestAnimationFrame(render);
   }
-  console.log(shared_resources.cpu_ruleset_buffer);
   requestAnimationFrame(render);
 }
 
 async function initWebGPU() {
   const adapter = await navigator.gpu?.requestAdapter();
   const presentation_format = navigator.gpu?.getPreferredCanvasFormat();
-  const device = await adapter.requestDevice();
-  console.log(presentation_format)
-
+  const device = (import.meta.env.VITE_TIMESTAMPS === "true") ? await adapter?.requestDevice({ // Debugging
+    requiredFeatures: ['timestamp-query']
+  }) : await adapter?.requestDevice(); // Production
+  
   return {
     adapter,
     presentation_format,
