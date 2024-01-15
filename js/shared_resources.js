@@ -1,7 +1,5 @@
 import { random_state, single_1, test_ruleset } from './states.js';
 
-import { global_emitter } from './events.js';
-
 import device_info from './device.js';
 
 /**
@@ -24,9 +22,9 @@ const ca_texture_descriptor = {
 };
 
 export const ca_textures = {
-    resource: Array(parseInt(import.meta.env.TCA_TEXTURE_COUNT)).fill(),
+    webgpu_resource: Array(parseInt(import.meta.env.TCA_TEXTURE_COUNT)).fill(),
     create: () => {
-        ca_textures.resource.forEach((_, i) => { ca_textures.resource[i] = device_info.device.createTexture(ca_texture_descriptor); });
+        ca_textures.webgpu_resource.forEach((_, i) => { ca_textures.webgpu_resource[i] = device_info.device.createTexture(ca_texture_descriptor); });
     },
     // initialize: (value_generator, texture_index) => {
         
@@ -84,7 +82,7 @@ export const rule_info = {
         const new_size = this.local_resource.k ** (2 * this.local_resource.r) * 4; 
 
         if (!this.update_validation(new_size)) return false;
-        ruleset_buffer.create(new_size);
+        ruleset.create(new_size);
 
         device_info.queue.writeBuffer(this.webgpu_resource, 0, new Uint32Array(Object.values(this.local_resource)));
     },
@@ -93,7 +91,7 @@ export const rule_info = {
     }
 }
 
-export const ruleset_buffer = {
+export const ruleset = {
     webgpu_resource: null,
     local_resource: null,
     create: function(size) {
@@ -126,5 +124,5 @@ export const ruleset_buffer = {
 export default {
     ca_textures,
     rule_info,
-    ruleset_buffer
+    ruleset_buffer: ruleset
 }

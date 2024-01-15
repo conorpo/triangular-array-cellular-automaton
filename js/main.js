@@ -1,11 +1,7 @@
 import { setupUI } from './ui.js';
 
 import device_info from './device.js';
-
-import { ca_textures, rule_info, ruleset_buffer } from './shared_resources.js';
-import './stages/iterate.js';
-import './stages/render.js';
-
+import { ca_textures, rule_info, ruleset } from './shared_resources.js';
 
 import Stats from 'stats.js';
 
@@ -21,19 +17,15 @@ async function init() {
     format: device_info.presentation_format,
   });
 
-  // Setup Resources and Stages
+  // Setup Shared Resources
   ca_textures.create();
   rule_info.create();
-  ruleset_buffer.create(rule_info.size);
+  ruleset.create(rule_info.size);
 
-  
-
-
-  //const mouse_info = await setupMouse();
-  
-  //const rule_generator_stage = await setupRuleGenerator(device, shared_resources);
-  const iterate_stage = await setupIterateStage(device, shared_resources);
-  const render_stage = await setupRenderStage(device, shared_resources, presentation_format);
+  // Import and setup stages
+  import('./stages/initialize_ruleset.js');
+  import('./stages/iterate.js');
+  import('./stages/render.js');
   
   // Initialze UI prior to populating resources
   const gui = await setupUI(shared_resources, iterate_stage);
