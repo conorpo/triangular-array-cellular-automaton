@@ -29,7 +29,7 @@ export async function setupIterateStage(device, shared_resources) {
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
-    iterate_stage.iterate_settings_buffers = Array(parseInt(import.meta.env.VITE_CA_TEXTURE_COUNT)).fill().map(() => { return device.createBuffer(iterate_settings_buffer_descriptor); });
+    iterate_stage.iterate_settings_buffers = Array(parseInt(import.meta.env.TCA_TEXTURE_COUNT)).fill().map(() => { return device.createBuffer(iterate_settings_buffer_descriptor); });
 
     iterate_stage.update_iterate_settings_buffer = function() {
         device.queue.writeBuffer(
@@ -127,7 +127,7 @@ export async function setupIterateStage(device, shared_resources) {
         ]
     });
 
-    const n = parseInt(import.meta.env.VITE_CA_TEXTURE_COUNT);
+    const n = parseInt(import.meta.env.TCA_TEXTURE_COUNT);
     iterate_stage.pingpong_bindgroups = [];
 
     for(let i = 0; i < n; i++) {

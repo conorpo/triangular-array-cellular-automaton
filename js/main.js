@@ -1,26 +1,34 @@
 import { setupUI } from './ui.js';
 
-import { setupSharedResources } from './shared_resources.js';
-import { setupIterateStage } from './stages/iterate.js';
-import { setupRenderStage } from './stages/render.js';
+import device_info from './device.js';
+
+import { ca_textures, rule_info, ruleset_buffer } from './shared_resources.js';
+import './stages/iterate.js';
+import './stages/render.js';
 
 
 import Stats from 'stats.js';
 
 async function init() {
-  const { adapter, device, presentation_format } = await initWebGPU();
+  await device_info.initWebGPU();
 
   const canvas = document.getElementById('webgpu_canvas');
   canvas.style.imageRendering = 'pixelated';
   const context = canvas.getContext('webgpu');
   if (!context) throw ReferenceError('WebGPU not supported');
   context.configure({
-    device,
-    format: presentation_format
+    device: device_info.device,
+    format: device_info.presentation_format,
   });
 
   // Setup Resources and Stages
-  const shared_resources = await setupSharedResources(device);
+  ca_textures.create();
+  rule_info.create();
+  ruleset_buffer.create(rule_info.size);
+
+  
+
+
   //const mouse_info = await setupMouse();
   
   //const rule_generator_stage = await setupRuleGenerator(device, shared_resources);
@@ -51,14 +59,14 @@ async function init() {
     return true;
   }
 
-  const workgroups = parseInt(import.meta.env.VITE_CA_TEXTURE_WIDTH) / 64;
+  const workgroups = parseInt(import.meta.env.TCA_TEXTURE_WIDTH) / 64;
 
   // Perf 
   const stats = new Stats();
   stats.dom.classList.add('taeca-stats');
   
   const debugTimings = {};
-  if(import.meta.env.VITE_TIMESTAMPS === "true") {
+  if(import.meta.env.TCA_TIMESTAMPS === "true") {
     debugTimings.querySet = device.createQuerySet({
       type: 'timestamp',
       count: 3, //Initial, After Iteration, After Render
@@ -95,11 +103,11 @@ async function init() {
 
     const encoder = device.createCommandEncoder({label: 'Frame Command Encoder'});
 
-    if(iterate_stage.iterate_settings.current_row < parseInt(import.meta.env.VITE_CA_TEXTURE_HEIGHT)) {
+    if(iterate_stage.iterate_settings.current_row < parseInt(import.meta.env.TCA_TEXTURE_HEIGHT)) {
       // Compute
       const compute_pass = encoder.beginComputePass({
         label: 'Iterate Pass',
-        timestampWrites: (import.meta.env.VITE_TIMESTAMPS === "true") ? {
+        timestampWrites: (import.meta.env.TCA_TIMESTAMPS === "true") ? {
 
           querySet: debugTimings.querySet,
           beginningOfPassWriteIndex: 0,
@@ -110,7 +118,7 @@ async function init() {
       compute_pass.setPipeline(iterate_stage.iterate_pipeline);
       compute_pass.setBindGroup(0, iterate_stage.iterate_bindgroup);
       
-      for(let i = 0; i < parseInt(import.meta.env.VITE_MAX_ITERATIONS_PER_FRAME); i++) {
+      for(let i = 0; i < parseInt(import.meta.env.TCA_MAX_ITERATIONS_PER_FRAME); i++) {
         compute_pass.setBindGroup(1, iterate_stage.pingpong_bindgroups[i % 2]);
         compute_pass.dispatchWorkgroups(workgroups);
         iterate_stage.iterate_settings.current_row++;
@@ -129,7 +137,7 @@ async function init() {
 
     render_pass.end();
 
-    if(import.meta.env.VITE_TIMESTAMPS === "true"){
+    if(import.meta.env.TCA_TIMESTAMPS === "true"){
       encoder.resolveQuerySet(debugTimings.querySet, 0, 3, debugTimings.timestampBuffer, 0);
       encoder.copyBufferToBuffer(debugTimings.timestampBuffer, 0, debugTimings.timestampReadBuffer, 0, 3 * 8);
     }
@@ -137,7 +145,7 @@ async function init() {
     const commandBuffer = encoder.finish();
     device.queue.submit([commandBuffer]);
 
-    if(import.meta.env.VITE_TIMESTAMPS === "true") {
+    if(import.meta.env.TCA_TIMESTAMPS === "true") {
       await debugTimings.timestampReadBuffer.mapAsync(GPUMapMode.READ)
       const timestamps = new BigUint64Array(debugTimings.timestampReadBuffer.getMappedRange());
       debugTimings.timestampReadBuffer.unmap();
@@ -152,19 +160,6 @@ async function init() {
   requestAnimationFrame(render);
 }
 
-async function initWebGPU() {
-  const adapter = await navigator.gpu?.requestAdapter();
-  const presentation_format = navigator.gpu?.getPreferredCanvasFormat();
-  const device = (import.meta.env.VITE_TIMESTAMPS === "true") ? await adapter?.requestDevice({ // Debugging
-    requiredFeatures: ['timestamp-query']
-  }) : await adapter?.requestDevice(); // Production
-  
-  return {
-    adapter,
-    presentation_format,
-    device
-  };
-}
 
 // Entry point
 try {
