@@ -31,9 +31,8 @@ async function init() {
   //#region Setup Shared Resources and Bindgroups
   ca_textures.create();
   rule_info.create();
-  rule_info.update(); // Will call
-  //ruleset.create(rule_info.local_resource.size);
-  view_info.create(canvas.width); //only needs canvas width for initialization
+  ruleset.create(rule_info.local_resource.size);
+  view_info.create(canvas); //only needs canvas width for initialization
 
   view_info_bindgroup.create_layout();
   //#endregion
@@ -60,20 +59,21 @@ async function init() {
 
   //#region Setup Render Stage
   if(parseInt(import.meta.env.TCA_SAMPLE_COUNT) > 1) { render.render_texture.create(canvas.width, canvas.height); }
+  render.color_map.create();
 
   // Shared Resource:  view_info_bindgroup  // Bindgroup 0
   render.texture_bindgroup.create_layout(); // Bindgroup 1
 
   render.stage.create_layout();  
   render.stage.create();
-  //#endregion
+  //#endregionhttps://www.youtube.com/watch?v=yXa2pvhlplM&t=43s
 
   //#region Setup Debug View Stage
   // Shared Resource:  view_info_bindgroup  // Bindgroup 0
-  // debug_view.rule_info_bindgroup.create_layout(); // Bindgroup 1
+  debug_view.vertex_buffer.create();
 
-  // debug_view.pipeline.create_layout();
-  // debug_view.pipeline.create();
+  debug_view.stage.create_layout();
+  debug_view.stage.create();
   //#endregion
   
   //Setup GUI
@@ -88,7 +88,7 @@ async function init() {
   stats.dom.classList.add('taeca-stats');
   document.body.appendChild(stats.dom);
   
-  begin_render_loop(context, stats);
+  begin_render_loop(context, stats, gui);
 }
 
 

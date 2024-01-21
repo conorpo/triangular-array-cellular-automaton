@@ -1,10 +1,9 @@
 import device_info from './device.js';
+import { vertex_buffer } from './stages/debug_view.js';
 
 import { rule_info_bindgroup as init_rule_info_bindgroup } from './stages/initialize_ruleset.js';
 import { rule_info_bindgroup as iterate_rule_info_bindgroup, pingpong_bindgroups }from './stages/iterate.js';
 import { texture_bindgroup } from './stages/render.js';
-import { rule_info_bindgroup as debug_rule_info_bindgroup } from './stages/debug_view.js';
-
 /**
  * @module SharedResources
  * @namespace SharedResources
@@ -48,7 +47,7 @@ export const ca_textures = {
         this.webgpu_resource?.forEach(texture => texture.destroy());
 
         this.webgpu_resource = Array(parseInt(import.meta.env.TCA_TEXTURE_COUNT)).fill().map(() => { return device_info.device.createTexture(ca_texture_descriptor); });
-        console.log(`Created ${this.webgpu_resource.length} CA Textures`);
+        if(import.meta.env.DEV) console.log(`Created ${this.webgpu_resource.length} CA Textures`);
         
         pingpong_bindgroups.dirty = true;
         texture_bindgroup.dirty = true;
@@ -60,7 +59,7 @@ export const ca_textures = {
             top_row_buffer[i] = value_generator(i);
         }
 
-        console.log(top_row_buffer);
+        if(import.meta.env.DEV) console.log(top_row_buffer);
 
         device_info.device.queue.writeTexture({
             texture: this.webgpu_resource[0],
@@ -118,7 +117,6 @@ export const rule_info = {
 
         init_rule_info_bindgroup.dirty = true;
         iterate_rule_info_bindgroup.dirty = true;
-        debug_rule_info_bindgroup.dirty = true;
     },
     update: function() {
         try {
@@ -127,6 +125,9 @@ export const rule_info = {
             console.error(e);
             return;
         }
+
+        // Also update the debug vertex buffer
+        vertex_buffer.update(this.local_resource.r);
 
         device_info.device.queue.writeBuffer(this.webgpu_resource, 0, new Uint32Array([this.local_resource.r, this.local_resource.k]));
     }
@@ -185,7 +186,7 @@ export const ruleset = {
 
 //#region View Info Resource
 /**
- * @typedef {Object} Origin
+ * @typedef {Object} Vector
  * @property {number} x The x coordinate of the origin
  * @property {number} y The y coordinate of the origin
  * @memberof SharedResources
@@ -193,8 +194,9 @@ export const ruleset = {
 
 /**
  * @typedef {Object} ViewInfo
- * @property {Origin} origin The origin of the view
+ * @property {Vector} origin The origin of the view
  * @property {number} zoom The zoom of the view
+ * @property {Object} canvas The canvas size
  * @memberof SharedResources
 */
 
@@ -211,26 +213,31 @@ export const view_info = {
     webgpu_resource: null,
     local_resource: null,
     update: function() {
+
         device_info.device.queue.writeBuffer(this.webgpu_resource, 0, new Float32Array([
             this.local_resource.origin.x,
             this.local_resource.origin.y,
-            this.local_resource.zoom,
+            this.local_resource.canvas.width,
+            this.local_resource.canvas.height,
+            this.local_resource.zoom
         ]));        
     },
-    create: function(canvas_width) {
+    create: function(canvas) {
         this.local_resource = {
             origin: {
-                x: parseInt(import.meta.env.TCA_TEXTURE_WIDTH) / 2 - (canvas_width / 2) / parseInt(import.meta.env.TCA_INIT_ZOOM),
+                x: parseInt(import.meta.env.TCA_TEXTURE_WIDTH) / 2 - (canvas.width / 2) / parseInt(import.meta.env.TCA_INIT_ZOOM),
                 y: 0,
+            },
+            canvas: {
+                width: canvas.width,
+                height: canvas.height,
             },
             zoom: parseInt(import.meta.env.TCA_INIT_ZOOM),
         };
 
-        console.log(this.local_resource)
-
         this.webgpu_resource = device_info.device.createBuffer({
             label: "View Info Buffer",
-            size: 12,
+            size: 24,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
@@ -260,7 +267,7 @@ export const view_info_bindgroup = {
             label: "View Info Bind Group Layout",
             entries: [{
                 binding: 0,
-                visibility: GPUShaderStage.FRAGMENT,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.VERTEX,
                 buffer: {
                     type: 'uniform'
                 }

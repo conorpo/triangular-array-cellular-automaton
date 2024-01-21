@@ -2,13 +2,11 @@ import { rule_info_wgsl } from "./initialize_ruleset.wgsl.js"
 
 export const iterate_shader_src = /* wgsl */`
 ${rule_info_wgsl}
+@group(0) @binding(1) var<storage, read> ruleset: array<u32>;
 
 struct IterateSettings {
     current_row: u32
 };
-
-
-@group(0) @binding(1) var<storage, read> ruleset: array<u32>;
 
 @group(1) @binding(0) var input_texture: texture_2d<u32>;
 @group(1) @binding(1) var<storage, read> input_iterate_settings: IterateSettings;
@@ -22,8 +20,6 @@ struct IterateSettings {
 
     let row = input_iterate_settings.current_row;
     let col = global_id.x;
-
-    if(col >= texture_width) { return; }
 
     // Copy the current row to the output texture
     textureStore(output_texture, vec2u(col, row), textureLoad(input_texture, vec2u(col, row), 0));

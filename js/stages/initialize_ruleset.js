@@ -40,7 +40,6 @@ export const random_seeds = {
         }
         // @ts-ignore
         device_info.device.queue.writeBuffer(this.webgpu_resource, 0, this.local_resource);
-        console.log(this.local_resource)
     },
 }
 //#endregion

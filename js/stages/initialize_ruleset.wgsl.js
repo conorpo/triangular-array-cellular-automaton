@@ -1,11 +1,10 @@
 
 export const rule_info_wgsl = /* wgsl */`
-struct RuleSettings {
+struct RuleInfo {
     r: u32,
     k: u32
 };
-
-@group(0) @binding(0) var<uniform> rule_settings: RuleSettings;
+@group(0) @binding(0) var<uniform> rule_settings: RuleInfo;
 `
 
 export const initialize_random_shader_src = /* wgsl */`

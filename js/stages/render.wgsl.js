@@ -1,18 +1,19 @@
-export const render_shader_src = /* wgsl */`
-
+export const view_info_wgsl = /* wgsl */`
 struct ViewInfo {
-    origin_x: f32,
-    origin_y: f32,
+    origin: vec2f,
+    canvas: vec2f,
     zoom: f32, // 1.0 = 1 pixel per cell
 }
 
-
 @group(0) @binding(0) var<uniform> view_info: ViewInfo;
+`;
 
+export const render_shader_src = /* wgsl */`
+${view_info_wgsl}
 @group(1) @binding(0) var ca_texture: texture_2d<u32>;
-//@group(1) @binding(1) var<uniform> color_map: array<vec4f>;
+@group(1) @binding(1) var<uniform> color_map: array<vec4f, ${parseInt(import.meta.env.TCA_MAX_STATES)}>;
 
-var<private> color_map : array<vec4f, 6> = array<vec4f, 6>(
+var<private> test_color_map : array<vec4f, 6> = array<vec4f, 6>(
     vec4<f32>(0.145,0.141,0.133,1.0), // Eerie black
     vec4<f32>(0.921,0.368,0.156,1.0), // Flame
     vec4<f32>(1,0.988,0.949,1.0), // Floral white
@@ -36,9 +37,9 @@ const quad_verts = array<vec2<f32>, 6>(
 }
 
 @fragment fn fs(@builtin(position) uv: vec4f) -> @location(0) vec4f {
-    let row = u32(uv.y / view_info.zoom + view_info.origin_y);
-    let col_notoffset = uv.x / view_info.zoom + view_info.origin_x;
-    let col = u32(select(col_notoffset, col_notoffset + 0.5, row % 2u == 1u));    
+    let grid_pos = uv.xy / view_info.zoom + view_info.origin;
+    let row = u32(grid_pos.y);
+    let col = u32(select(grid_pos.x, grid_pos.x + 0.5, row % 2u == 1u));
 
     let state = textureLoad(ca_texture, vec2u(col,row), 0);
 

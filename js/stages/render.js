@@ -4,6 +4,9 @@ import { view_info_bindgroup, ca_textures } from "../shared_resources.js";
 
 import device_info from "../device.js";
 
+
+
+
 //#region Render Texture Resource
 /**
  * @type {import("../types.js").ResourceContainer}
@@ -11,7 +14,7 @@ import device_info from "../device.js";
 export const render_texture = {
     webgpu_resource: null,
     create: function(width, height) {
-        console.log("Creating Render Texture with multisample count: " + parseInt(import.meta.env.TCA_SAMPLE_COUNT));
+        if(import.meta.env.DEV) console.log("Creating Render Texture with multisample count: " + parseInt(import.meta.env.TCA_SAMPLE_COUNT));
         this.webgpu_resource = device_info.device.createTexture({
             label: "Render Texture",
             size: [width, height],
@@ -23,9 +26,56 @@ export const render_texture = {
         stage.render_pass_descriptor.colorAttachments[0].view = this.webgpu_resource.createView();
     }
 }
+//#endregion
 
 
-//#region CA Texture Bindgroup
+
+//#region Color Map Resource
+/**
+ * @typedef {Object} ColorMapResourceContainer
+ * @property {Object} local_resource The local color map buffer
+ */
+
+/**
+ * @type {import("../types.js").ResourceContainer & ColorMapResourceContainer}
+ */
+
+export const color_map = {
+    webgpu_resource: null,
+    local_resource: null,
+    create: function() {
+        this.local_resource = {};
+        for(let i = 0; i < parseInt(import.meta.env.TCA_MAX_STATES); i++) {
+            this.local_resource[`COLOR_${i}`] = import.meta.env[`TCA_INITIAL_COLOR_${i}`].split(',').map((x) => { return parseInt(x); });
+        }
+
+        this.webgpu_resource = device_info.device.createBuffer({
+            label: "Color Map Buffer",
+            size: (4 * Float32Array.BYTES_PER_ELEMENT) * parseInt(import.meta.env.TCA_MAX_STATES),
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+
+        texture_bindgroup.dirty = true;
+    },
+    update: function() {
+        const new_colors = new Float32Array(4 * parseInt(import.meta.env.TCA_MAX_STATES));
+        console.log(color_map.local_resource)
+
+        for(let i = 0; i < parseInt(import.meta.env.TCA_MAX_STATES); i++) {
+            const color = color_map.local_resource[`COLOR_${i}`];
+            new_colors[i*4] = color[0] / 255;
+            new_colors[i*4+1] = color[1] / 255;
+            new_colors[i*4+2] = color[2] / 255;
+            new_colors[i*4+3] = color[3];
+        }
+
+        if(import.meta.env.DEV) console.log("New Colors: ", new_colors);
+
+        device_info.device.queue.writeBuffer(color_map.webgpu_resource, 0, new_colors);
+    }
+}
+
+//#region CA Texture & Color Bindgroup
 /**
  * @type {import("../types.js").BindgroupContainer}
 */
@@ -48,6 +98,13 @@ export const texture_bindgroup = {
                         viewDimension: "2d",
                         multisampled: false
                     }
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: {
+                        type: "uniform"
+                    }
                 }
             ]
         });
@@ -59,6 +116,12 @@ export const texture_bindgroup = {
                 {
                     binding: 0,
                     resource: ca_textures.webgpu_resource[0].createView()
+                },
+                {
+                    binding: 1,
+                    resource: {
+                        buffer: color_map.webgpu_resource
+                    }
                 }
             ]
         });
@@ -106,6 +169,7 @@ export const stage = {
         });
 
         this.pipeline = device_info.device.createRenderPipeline({
+            label: "Main Render Pipeline",
             layout: this.layout,
             vertex: {
                 module: this.shader,
@@ -132,6 +196,7 @@ export const stage = {
 //#endregion
 
 export default {
+    color_map,
     texture_bindgroup,
     stage,
     render_texture

@@ -74,7 +74,7 @@ export const mouse = {
             const old_zoom = view_info.local_resource.zoom;
             const new_zoom = Math.min(Math.max(old_zoom * (1 - event.deltaY * 0.001), this.MIN_ZOOM), this.MAX_ZOOM);
             
-            if(import.meta.env.DEV) console.log(`Zooming from ${old_zoom} to ${new_zoom}`);
+            // if(import.meta.env.DEV) console.log(`Zooming from ${old_zoom} to ${new_zoom}`);
 
             if(Math.abs(new_zoom - old_zoom) < 0.0001) return;
 
@@ -94,7 +94,7 @@ export const mouse = {
 
             this.boundsCheck(new_origin, new_zoom, element);
 
-            if(import.meta.env.DEV) console.log(`old_offset: ${JSON.stringify(old_offset)}, new_origin: ${JSON.stringify(new_origin)}`);
+            // if(import.meta.env.DEV) console.log(`old_offset: ${JSON.stringify(old_offset)}, new_origin: ${JSON.stringify(new_origin)}`);
 
             view_info.local_resource.origin = new_origin;
             view_info.local_resource.zoom = new_zoom;

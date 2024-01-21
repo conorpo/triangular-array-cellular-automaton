@@ -5,13 +5,15 @@ Demo Link: https://conorpo.github.io/triangular-array-cellular-automaton
 
 ## TODO
 ```
-- [❌] Add a way to change initialization
+- [❌] Add a way to change initialization - ETA: 1 hour
 - [✔️] Get rid of the atomic operations
-- [❌] Display the rule number
-- [❌] Add a way to change the rule number
+- [❌] Display the rule number - ETA: 2 hours
+- [❌] Add a way to change the rule number - ETA: combien with above
 - [✔️] Add View Controls
-- [❌] Add a way to change the color scheme
-- [❌] Fix filtering / multisampling
+- [✔️] Add a way to change the color scheme - ETA: 2 hours
+- [❌] Fix filtering / multisampling - ETA: idk whats going on
+- [❌] Add history - ETA: 3 hours
+- [✔️] Debug View - ETA: 1 hour
 ```
 <!-- ✔️ -->
 

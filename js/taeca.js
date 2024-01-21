@@ -12,6 +12,7 @@ import _render from "./stages/render.js";
 import debug_view from "./stages/debug_view.js";
 
 import { single_1 } from "./states.js";
+import Stats from "stats.js";
 
 import { mouse } from "./mouse.js";
 
@@ -26,8 +27,8 @@ function resizeIfNeeded(canvas_element) {
     const height = Math.max(1, Math.min(device_info.device.limits.maxTextureDimension2D, canvas_element.clientHeight));
 
     if (canvas_element.width === width && canvas_element.height === height) return false;
-    canvas_element.width = width;
-    canvas_element.height = height; 
+    view_info.local_resource.canvas.width = canvas_element.width = width;
+    view_info.local_resource.canvas.height = canvas_element.height = height;
 
     // Create a new render texture if multi-sampling is enabled
     if(import.meta.env.TCA_SAMPLE_COUNT > 1) _render.render_texture.create(width, height);
@@ -41,48 +42,53 @@ function resizeIfNeeded(canvas_element) {
 }
 
 
-const ITERATE_WORKGROUPS = Math.ceil(parseInt(import.meta.env.TCA_TEXTURE_WIDTH) / 64);
-
+const ITERATE_WORKGROUPS = parseInt(import.meta.env.TCA_TEXTURE_WIDTH) / 64;
 /**
  * @function begin_render_loop
  * @description Begin the render loop.
  * @param {GPUCanvasContext} context
  * @param {Object} stats
  */
-export function begin_render_loop(context, stats) {
+export function begin_render_loop(context, stats, gui) {
     const debugTimings = {};
     if(import.meta.env.TCA_TIMESTAMPS === "true") {
+        debugTimings.queryCount = 3;
+
         debugTimings.querySet = device_info.device.createQuerySet({
-        type: 'timestamp',
-        count: 3, //Initial, After Iteration, After Render
+          type: 'timestamp',
+          count: debugTimings.queryCount, //Initial, After Iteration, After Render
         });
         
-        debugTimings.timestampBuffer = device_info.device.createBuffer({
-        label: 'Timestamp Buffer',
-        size: 3 * 8,
-        usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE,
+        debugTimings.resolveBuffer = device_info.device.createBuffer({
+          label: 'Timestamp Buffer',
+          size: debugTimings.queryCount * BigInt64Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE,
         });
         
         debugTimings.timestampReadBuffer = device_info.device.createBuffer({
-        label: 'Timestamp Read Buffer',
-        size: 3 * 8,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+          label: 'Timestamp Read Buffer',
+          size: debugTimings.queryCount * BigInt64Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
         });  
         
         stats.iteration = stats.addPanel(new Stats.Panel('µs Iteration', '#ff8', '#221'));
         stats.render = stats.addPanel(new Stats.Panel('µs Render', '#f8f', '#212'));
     
         _render.stage.render_pass_descriptor.timestampWrites = {
-        querySet: debugTimings.querySet,
-        endOfPassWriteIndex: 2
+          querySet: debugTimings.querySet,
+          endOfPassWriteIndex: 2
         }
     };
 
+    rule_info.update();
     ca_textures.initialize_top_row(single_1(rule_info.local_resource.k, parseInt(import.meta.env.TCA_TEXTURE_WIDTH)));
-    set_rule(6);
+    set_rule(parseInt(import.meta.env.TCA_INITIAL_RULE_NUMBER));
+    _render.color_map.update();
 
     async function render() {  
         stats.begin();
+
+        //console.log(_render.color_map)
     
         // Check for window resize, re create depth texture if so
         resizeIfNeeded(context.canvas);
@@ -92,7 +98,6 @@ export function begin_render_loop(context, stats) {
         // Update Resources that change every frame
         view_info.update();
 
-    
         if(iterate.iterate_settings.local_resource.current_row < parseInt(import.meta.env.TCA_TEXTURE_HEIGHT)) {
           // Compute
           const compute_pass = encoder.beginComputePass({
@@ -126,12 +131,19 @@ export function begin_render_loop(context, stats) {
         render_pass.setBindGroup(0, view_info_bindgroup.bindgroup);
         render_pass.setBindGroup(1, _render.texture_bindgroup.bindgroup);
         render_pass.draw(6);
-    
+
+        if(gui.mouseOverRuleInfo) {
+          render_pass.setPipeline(debug_view.stage.pipeline);
+          render_pass.setBindGroup(0, view_info_bindgroup.bindgroup);
+          render_pass.setVertexBuffer(0, debug_view.vertex_buffer.webgpu_resource);
+          render_pass.draw(16);
+        }
+
         render_pass.end();
     
         if(import.meta.env.TCA_TIMESTAMPS === "true"){
-          encoder.resolveQuerySet(debugTimings.querySet, 0, 3, debugTimings.timestampBuffer, 0);
-          encoder.copyBufferToBuffer(debugTimings.timestampBuffer, 0, debugTimings.timestampReadBuffer, 0, 3 * 8);
+          encoder.resolveQuerySet(debugTimings.querySet, 0, 3, debugTimings.resolveBuffer, 0);
+          encoder.copyBufferToBuffer(debugTimings.resolveBuffer, 0, debugTimings.timestampReadBuffer, 0, 3 * 8);
         }
     
         const commandBuffer = encoder.finish();
@@ -141,7 +153,7 @@ export function begin_render_loop(context, stats) {
           await debugTimings.timestampReadBuffer.mapAsync(GPUMapMode.READ)
           const timestamps = new BigUint64Array(debugTimings.timestampReadBuffer.getMappedRange());
           debugTimings.timestampReadBuffer.unmap();
-          console.log(timestamps[0], timestamps[1], timestamps[2]);
+          if(import.meta.env.DEV) console.log(timestamps[0], timestamps[1], timestamps[2]);
           stats.iteration.update(Number(timestamps[1] - timestamps[0]) / 1000, 1000);
           stats.render.update(Number(timestamps[2] - timestamps[1]) / 1000, 1000);
         }
@@ -164,7 +176,7 @@ export function set_rule(rule_number) {
     ruleset.local_resource[i] = rule_number % rule_info.local_resource.k;
     rule_number = Math.floor(rule_number / rule_info.local_resource.k);
   }
-  console.log(ruleset.local_resource)
+  if(import.meta.env.DEV) console.log(ruleset.local_resource)
 
   ruleset.update();
 }
@@ -195,9 +207,7 @@ export function new_rule () {
 
   iterate.iterate_settings.local_resource.current_row = 0;
   iterate.iterate_settings.update();
-  console.log(iterate.iterate_settings.local_resource.current_row)
-  
-  console.log("New rule created");
+ 
 }
 
 /**
