@@ -45,7 +45,7 @@ export function random_state(k) {
 */
 export function single_1(k, size) {
     return (index) => {
-        if(index === size/2) return k-1;
+        if(index === Math.floor(size/2)) return k-1;
         return 0;
     }
 }

@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "isolatedModules": true,
+        "lib": ["ESNext", "DOM"],
+        "allowJs": true,
+        "checkJs": true,
+        "noEmit": true,
+        "useDefineForClassFields": true,
+        "module": "NodeNext",
+        "types": ["@webgpu/types","vite/client","wgpu-matrix"],
+        
+    },
+    "include": ["./**/*"],
+    "exclude": ["node_modules", "**/*.spec.ts"]
+}

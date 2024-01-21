@@ -1,11 +1,19 @@
-import { random_state, single_1, test_ruleset } from './states.js';
-
 import device_info from './device.js';
 
+import { rule_info_bindgroup as init_rule_info_bindgroup } from './stages/initialize_ruleset.js';
+import { rule_info_bindgroup as iterate_rule_info_bindgroup, pingpong_bindgroups }from './stages/iterate.js';
+import { texture_bindgroup } from './stages/render.js';
+import { rule_info_bindgroup as debug_rule_info_bindgroup } from './stages/debug_view.js';
+
 /**
- * @module shared_resources
+ * @module SharedResources
+ * @namespace SharedResources
+ * @description A namespace for shared resources.
 */
 
+
+
+// #region Cellular Automaton Texture Resources
 export const [ca_width, ca_height] = [parseInt(import.meta.env.TCA_TEXTURE_WIDTH), parseInt(import.meta.env.TCA_TEXTURE_HEIGHT)];
     
 /**
@@ -21,89 +29,145 @@ const ca_texture_descriptor = {
     usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
 };
 
+/**
+ * @typedef {Function} Initialize
+ * @param {Function} value_generator A function that takes a single parameter, the index of the value to generate, and returns a state value.
+ */
+
+/**
+ * @typedef {Object} CATexturesResourceContainer
+ * @property {Initialize} initialize_top_row A function that initializes the top row of CA texture [0].
+ * @memberof SharedResources
+ */
+/** 
+ *@type {import('./types.js').ResourceContainer & CATexturesResourceContainer} 
+ */
 export const ca_textures = {
-    webgpu_resource: Array(parseInt(import.meta.env.TCA_TEXTURE_COUNT)).fill(),
-    create: () => {
-        ca_textures.webgpu_resource.forEach((_, i) => { ca_textures.webgpu_resource[i] = device_info.device.createTexture(ca_texture_descriptor); });
+    webgpu_resource: null,
+    create: function() {
+        this.webgpu_resource?.forEach(texture => texture.destroy());
+
+        this.webgpu_resource = Array(parseInt(import.meta.env.TCA_TEXTURE_COUNT)).fill().map(() => { return device_info.device.createTexture(ca_texture_descriptor); });
+        console.log(`Created ${this.webgpu_resource.length} CA Textures`);
+        
+        pingpong_bindgroups.dirty = true;
+        texture_bindgroup.dirty = true;
     },
-    // initialize: (value_generator, texture_index) => {
+    initialize_top_row: function(value_generator) {
+        const top_row_buffer = new Uint32Array(ca_width);
         
-    //     const max_width = Math.max(ca_width, parseInt(import.meta.env.MAX_RANDOM_STATES));
-    //     const top_row = new Uint32Array(max_width);
-    //     for(let i = 0; i < max_width; i++) {
-    //         top_row[i] = value_generator(i);
-    //     }
-        
-        
-    //     for(let cur_col = 0; cur_col < ca_width; cur_col += max_width) {
-    //         device_info.device.queue.writeTexture({
-    //             texture: ca_textures.resource[texture_index],
-    //             origin: [cur_col, 0, 0]
-    //         }, top_row , {}, {
-    //             width: max_width,
-    //             height: 1
-    //         });
-    //     }
-    // }
+        for(let i = 0; i < top_row_buffer.length; i++) {
+            top_row_buffer[i] = value_generator(i);
+        }
+
+        console.log(top_row_buffer);
+
+        device_info.device.queue.writeTexture({
+            texture: this.webgpu_resource[0],
+        }, top_row_buffer, {}, {
+            width: ca_width,
+            height: 1,
+        });
+    }
 }
 
+//#endregion
 
 
+
+//#region Rule Info Resource
 const initial_r = parseInt(import.meta.env.TCA_INITIAL_RANGE);
 const initial_k = parseInt(import.meta.env.TCA_INITIAL_STATES);
 
-/** 
-* @typedef {Object} RuleInfo
-* @property {Object} local_resource The local resource that contains the rule info.
-* @property {number} local_resource.r The range of the rule, 1 means the cells immediately adjacent above you.
-* @property {number} local_resource.k The number of possible states for a cell
-* @property {number} size The size of the rule info buffer.
-* @property {GPUBuffer} webgpu_resource The GPU buffer that contains the rule info.
-* @property {function} create_webgpu_resource Creates the webgpu resource.
-* @property {function} update Updates the rule info buffer, and recreates the ruleset buffer.
-* @property {function} update_validation Validates the requested size for the rule info buffer.
+/**
+ * @typedef {Object} RuleInfo
+ * @property {number} k The number of states
+ * @property {number} r The radius of the neighborhood
+ * @property {number} size The size of the ruleset
+ * @memberof SharedResources
 */
 
 /**
-* @type {RuleInfo} rule_info
+ * @typedef {Object} RuleInfoResourceContainer
+ * @property {RuleInfo} local_resource The local rule info object
 */
+
+/** 
+ *@type {import('./types.js').ResourceContainer & RuleInfoResourceContainer} 
+ */
 export const rule_info = {
     webgpu_resource: null,
-    local_resource: { r: initial_r, k: initial_k },
-    size: initial_k ** (2 * initial_r) * 4,
+    local_resource: null,
     create: function() {
+        this.webgpu_resource?.destroy();
+
+        /** @type {RuleInfo} */
+        this.local_resource = {
+            r: initial_r,
+            k: initial_k,
+            get size() {
+                return this.k ** (2 * this.r) * 4;
+            }
+        }
+
         this.webgpu_resource = device_info.device.createBuffer({
             label: "Rule Info Buffer",
             size: 8, // Same structure, 2 * 4 bytes
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         })
+
+        init_rule_info_bindgroup.dirty = true;
+        iterate_rule_info_bindgroup.dirty = true;
+        debug_rule_info_bindgroup.dirty = true;
     },
     update: function() {
-        const new_size = this.local_resource.k ** (2 * this.local_resource.r) * 4; 
+        try {
+            ruleset.create(this.local_resource.size);
+        } catch (e) {
+            console.error(e);
+            return;
+        }
 
-        if (!this.update_validation(new_size)) return false;
-        ruleset.create(new_size);
-
-        device_info.queue.writeBuffer(this.webgpu_resource, 0, new Uint32Array(Object.values(this.local_resource)));
-    },
-    update_validation: function(requested_size) {
-        return requested_size > device_info.device.limits.maxStorageBufferBindingSize;
+        device_info.device.queue.writeBuffer(this.webgpu_resource, 0, new Uint32Array([this.local_resource.r, this.local_resource.k]));
     }
 }
+//#endregion
 
+
+
+//#region Rule Set Resource
+/**
+ * @typedef {Object} RuleSetResourceContainer
+ * @property {Uint32Array} local_resource The local ruleset buffer
+ * @memberof SharedResources
+*/
+
+/** 
+ * @type {import('./types.js').ResourceContainer & RuleSetResourceContainer} ruleset 
+ */
 export const ruleset = {
     webgpu_resource: null,
     local_resource: null,
     create: function(size) {
-        this.local_resource = new Uint32Array(size/4);
+        // Check if the size is valid
+        if (size > device_info.device.limits.maxStorageBufferBindingSize) return false;
 
         this.webgpu_resource?.destroy();
+        
+        console.time("Local Ruleset Buffer Creation");
+        this.local_resource = new Uint32Array(size/4);
+        console.timeEnd("Local Ruleset Buffer Creation");
 
         this.webgpu_resource = device_info.device.createBuffer({
             label: "Ruleset Buffer",
             size: size,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
+
+        init_rule_info_bindgroup.dirty = true;
+        iterate_rule_info_bindgroup.dirty = true;
+
+        return true;
     },
     /**
      * Updates the ruleset buffer with the given value generator.
@@ -111,18 +175,110 @@ export const ruleset = {
      * @param {function} value_generator A function that takes a single parameter, the index of the value to generate.
     * @todo Implement hacky solution to cheat the ranndomness, and beat JS O(n)
     */
-    update: function(value_generator) {
-        for(let i = 0; i < this.local_resource.length; i++) {
-            this.local_resource[i] = value_generator(i);
-        }
-
-        if(import.meta.env.DEV) console.log(this.local_resource);
+    update: function() {
         device_info.device.queue.writeBuffer(this.webgpu_resource, 0, this.local_resource);
     }
 }
+//#endregion
 
-export default {
-    ca_textures,
-    rule_info,
-    ruleset_buffer: ruleset
+
+
+//#region View Info Resource
+/**
+ * @typedef {Object} Origin
+ * @property {number} x The x coordinate of the origin
+ * @property {number} y The y coordinate of the origin
+ * @memberof SharedResources
+*/
+
+/**
+ * @typedef {Object} ViewInfo
+ * @property {Origin} origin The origin of the view
+ * @property {number} zoom The zoom of the view
+ * @memberof SharedResources
+*/
+
+/** 
+ * @typedef {Object} ViewInfoResourceContainer
+ * @property {ViewInfo} local_resource The local view info object
+ * @memberof SharedResources
+ */
+
+/** 
+ * @type {import('./types.js').ResourceContainer & ViewInfoResourceContainer} 
+ */
+export const view_info = {
+    webgpu_resource: null,
+    local_resource: null,
+    update: function() {
+        device_info.device.queue.writeBuffer(this.webgpu_resource, 0, new Float32Array([
+            this.local_resource.origin.x,
+            this.local_resource.origin.y,
+            this.local_resource.zoom,
+        ]));        
+    },
+    create: function(canvas_width) {
+        this.local_resource = {
+            origin: {
+                x: parseInt(import.meta.env.TCA_TEXTURE_WIDTH) / 2 - (canvas_width / 2) / parseInt(import.meta.env.TCA_INIT_ZOOM),
+                y: 0,
+            },
+            zoom: parseInt(import.meta.env.TCA_INIT_ZOOM),
+        };
+
+        console.log(this.local_resource)
+
+        this.webgpu_resource = device_info.device.createBuffer({
+            label: "View Info Buffer",
+            size: 12,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+
+        this.update();
+
+        view_info_bindgroup.dirty = true;
+    }
 }
+//#endregion
+
+
+
+//#region View Info Bindgroup
+/** 
+ * @type {import('./types.js').BindgroupContainer} 
+ */
+export const view_info_bindgroup = {
+    _bindgroup: null,
+    layout: null,
+    dirty: true,
+    get bindgroup() {
+        if(this.dirty) this.create_bindgroup();
+        return this._bindgroup;
+    },
+    create_layout: function() {
+        this.layout = device_info.device.createBindGroupLayout({
+            label: "View Info Bind Group Layout",
+            entries: [{
+                binding: 0,
+                visibility: GPUShaderStage.FRAGMENT,
+                buffer: {
+                    type: 'uniform'
+                }
+            }]
+        });
+    },
+    create_bindgroup: function() {
+        this._bindgroup = device_info.device.createBindGroup({
+            label: "View Info Bind Group",
+            layout: this.layout,
+            entries: [{
+                binding: 0,
+                resource: {
+                    buffer: view_info.webgpu_resource
+                }
+            }]
+        });
+        this.dirty = false;
+    },
+}
+//#endregion

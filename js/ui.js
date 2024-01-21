@@ -1,5 +1,8 @@
 import * as dat from 'dat.gui';
-import { random_state } from './states';
+
+import taeca from './taeca.js';
+
+import { rule_info } from './shared_resources.js';
 
 /**
  * @module ui
@@ -10,38 +13,33 @@ import { random_state } from './states';
  * @function setupUI
  * @returns {dat.GUI} The dat.GUI instance.
 */
-export function setupUI(shared_resources, iterate_stage) {
+export function setupUI() {
     const gui = new dat.GUI({
         name: 'Cellular Automata'
     });
 
     gui.width = 200;
 
-    const buttons = {
-        new_rule: () => {
-            shared_resources.update_ruleset_buffer(random_state(shared_resources.rule_info.k));
-            iterate_stage.reset();
-        }
-    }
-
     //GUI Settings
     const rule_info_folder = gui.addFolder('Rule Info');
     rule_info_folder.open();
-    rule_info_folder.add(shared_resources.rule_info, 'r', 1, 6, 1).name('r (range)').onFinishChange(attempt_rule_info_buffer_update);
-    rule_info_folder.add(shared_resources.rule_info, 'k', 2, 6, 1).name('k (states)').onFinishChange(attempt_rule_info_buffer_update);
-    rule_info_folder.add(buttons, 'new_rule').name('New Rule');
-    
+    rule_info_folder.add(rule_info.local_resource, 'r', 1, 6, 1).name('r (range)').onFinishChange(() => {
+        unguaranteed_ui_update(taeca.attempt_rule_info_update, rule_info_folder.domElement.children[0])
+    });
+    rule_info_folder.add(rule_info.local_resource, 'k', 2, 6, 1).name('k (states)').onFinishChange(() => {
+        unguaranteed_ui_update(taeca.attempt_rule_info_update, rule_info_folder.domElement.children[0])
+    });
+    rule_info_folder.add(taeca, 'new_rule').name('New Rule');
 
-    function attempt_rule_info_buffer_update() {
-        if(shared_resources.update_rule_info_buffer()) {
-            rule_info_folder.domElement.children[0].style.color = "";
-            rule_info_folder.domElement.children[0].children[0].innerText = "Rule Info";
-            iterate_stage.reset();
+    function unguaranteed_ui_update(update_func, element) {
+        if(update_func()) {
+            element.style.color = "";
+            element.children[0].innerText = "Rule Info";
         } else {
-            rule_info_folder.domElement.children[0].style.color = "red";
-            rule_info_folder.domElement.children[0].children[0].innerText = "Rule Info (Buffer Size Too Large)";
+            element.style.color = "red";
+            element.children[0].innerText = "Rule Info (Buffer Size Too Large)";
+        
         }
-            
     }
 
     

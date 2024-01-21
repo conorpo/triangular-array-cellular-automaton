@@ -1,3 +1,14 @@
+/**
+ * @typedef {Object} DeviceInfo
+ * @property {GPUDevice} device The webgpu device
+ * @property {GPUAdapter} adapter The webgpu adapter
+ * @property {GPUTextureFormat} presentation_format The presentation format
+ * @property {function} initWebGPU Initializes the webgpu device
+*/
+
+/**
+ * @type {DeviceInfo}
+ */
 export default {
     device: null,
     adapter: null,

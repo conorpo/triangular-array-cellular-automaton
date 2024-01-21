@@ -13,17 +13,18 @@ body {
   width: 100vw;
   height: 100vh;
   background-color: #000000;
-  image-rendering: pixelated;
 }
 
 .taeca-title {
   position: absolute;
   left: 80px;
   top: 0px;
+  width: 420px;
 
-  font: 1em 'Open Sans', sans-serif;
+  font: 1.05em 'Open Sans', sans-serif;
   color:white;
   background-color: rgba(0,0,0,0.8);
+  line-height: 1.25em;
   
 
   padding: var(--title_padding) 6px;
@@ -36,4 +37,18 @@ body {
 
 .taeca-stats {
   border-bottom: var(--ui_border);
+}
+
+.taeca-title a {
+  position: absolute;
+  top:0px;
+  right:0px;
+  height: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.taeca-title a img {
+  height: 100%;
+  width: 100%;
 }

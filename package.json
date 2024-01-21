@@ -10,12 +10,11 @@
   },
   "devDependencies": {
     "vite": "^5.0.8",
-    "vitest": "^1.2.0"
+    "vitest": "^1.2.1"
   },
   "dependencies": {
     "@webgpu/types": "^0.1.40",
     "dat.gui": "^0.7.9",
-    "events": "^3.3.0",
     "stats.js": "^0.17.0"
   }
 }

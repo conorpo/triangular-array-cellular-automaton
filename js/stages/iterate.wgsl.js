@@ -1,15 +1,13 @@
+import { rule_info_wgsl } from "./initialize_ruleset.wgsl.js"
+
 export const iterate_shader_src = /* wgsl */`
-struct RuleSettings {
-    r: u32,
-    k: u32
-};
+${rule_info_wgsl}
 
 struct IterateSettings {
     current_row: u32
 };
 
 
-@group(0) @binding(0) var<uniform> rule_settings: RuleSettings;
 @group(0) @binding(1) var<storage, read> ruleset: array<u32>;
 
 @group(1) @binding(0) var input_texture: texture_2d<u32>;
@@ -20,8 +18,12 @@ struct IterateSettings {
 @compute @workgroup_size(64) fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
+    let texture_width = textureDimensions(input_texture).x;
+
     let row = input_iterate_settings.current_row;
     let col = global_id.x;
+
+    if(col >= texture_width) { return; }
 
     // Copy the current row to the output texture
     textureStore(output_texture, vec2u(col, row), textureLoad(input_texture, vec2u(col, row), 0));
@@ -30,11 +32,13 @@ struct IterateSettings {
     // Odd rows are offset by 1 to the left
 
     var rule_index = 0u;
-    // Example: if r = 2, and row is odd then we check -2, -1, 0, 1
-    // If the row is even then we want to check -1, 0, 1, 2
+    // Example: if r = 1, and current row (row we are checking, first step of iterate) is even then we check 0, 1
+    // If the row is odd then we check -1, 0
     for(var i = -i32(rule_settings.r); i < i32(rule_settings.r); i++) {
         rule_index *= rule_settings.k;
-        rule_index += textureLoad(input_texture, vec2u(u32(i32(col) + i + offset), row), 0).r;
+        let col_to_load = u32(i32(col) + i + offset + i32(texture_width)) % texture_width; 
+        
+        rule_index += textureLoad(input_texture, vec2u(col_to_load, row), 0).r;
     }
 
     let state = ruleset[rule_index];
