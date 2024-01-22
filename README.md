@@ -5,10 +5,10 @@ Demo Link: https://conorpo.github.io/triangular-array-cellular-automaton
 
 ## TODO
 ```
-- [❌] Add a way to change initialization - ETA: 1 hour
+- [✔️] Add a way to change initialization - ETA: 1 hour
 - [✔️] Get rid of the atomic operations
-- [❌] Display the rule number - ETA: 2 hours
-- [❌] Add a way to change the rule number - ETA: combien with above
+- [✔️] Display the rule number - ETA: 2 hours
+- [✔️] Add a way to change the rule number - ETA: combien with above
 - [✔️] Add View Controls
 - [✔️] Add a way to change the color scheme - ETA: 2 hours
 - [❌] Fix filtering / multisampling - ETA: idk whats going on
@@ -19,7 +19,7 @@ Demo Link: https://conorpo.github.io/triangular-array-cellular-automaton
 
 
 ## WebGPU Retrospect
-Once again the codebase didn't turn out perfect, but it's a lot better than the [last one](https://github.com/conorpo/marching-cubes-webgpu). WebGPU resources are tough to modularize cleanly; I separated them by shader which made it hard to automatically update the bindings. 
+Once again the codebase didn't turn out perfect, but it's a lot better than the [last one](https://github.com/conorpo/marching-cubes-webgpu). WebGPU resources are tough to modularize cleanly; I separated them by shader which made it hard to **automatically** update the bindings. 
 
 I decided on the following abstraction model; but for my next project, I would do things a bit differently (see Pros/Cons below).
 

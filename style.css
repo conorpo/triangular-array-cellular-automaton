@@ -4,9 +4,15 @@ body {
   overflow-x: hidden;
 }
 
+@font-face {
+  font-family: "Cascadia";
+  src: url("./assets/Cascadia/Cascadia.woff2");
+}
+
 * {
   --ui_border: 3px solid rgba(127,127,127,1.0);
-  --title_padding: 2px;
+  --title_padding: 8px;
+  font-family: "Cascadia";
 }
 
 #webgpu_canvas {
@@ -21,18 +27,25 @@ body {
   top: 0px;
   width: 420px;
 
-  font: 1.05em 'Open Sans', sans-serif;
+  font: 0.58rem 'Open Sans', sans-serif;
   color:white;
   background-color: rgba(0,0,0,0.8);
-  line-height: 1.25em;
+  line-height: 0.66rem;
   
-
-  padding: var(--title_padding) 6px;
+  padding: var(--title_padding) 5px;
   box-sizing: content-box;
   height: calc(48px - var(--title_padding) * 2);
   border-bottom: var(--ui_border);
   border-right:var(--ui_border);
   opacity: 0.9;
+}
+
+.taeca-title h1 {
+  margin: 0px;
+}
+
+.taeca-title h2 {
+  margin: 0px;
 }
 
 .taeca-stats {
@@ -51,4 +64,80 @@ body {
 .taeca-title a img {
   height: 100%;
   width: 100%;
+}
+
+.loading-gif {
+  position: absolute;
+  right: 0vw;
+  width: 100vw;
+  height: 100vh;
+  visibility: hidden;
+}
+
+
+.rule-import-export {
+  position: absolute;
+  top: 20vh;
+  left: 30vw;
+  width: 40vw;
+  height: 60vh;
+  background-color: rgba(235, 94, 40, 1);
+  padding: 10px;
+  box-sizing: border-box;
+
+  visibility: hidden;
+  filter: drop-shadow(0px 0px 10px rgba(0,0,0,0.5));
+}
+
+.rule-import-export-header {
+  display: flex;
+}
+
+.rule-import-export-header h3 {
+  height: 30px;
+  margin: 0px;
+}
+
+.rule-import-export-header button {
+  margin-left: auto;
+  margin-right: 3px;
+  height: 24px;
+  width: 20px;
+  padding: 0px;
+  background-color: transparent;
+  font-weight: bold;
+  transform: scaleX(1.25);
+}
+
+.rule-import-export-header button:hover {
+  background-color: rgba(64,61,57,1.0);
+  cursor: pointer;
+}
+
+.rule-textarea {
+  width: 100%;
+  height: calc(100% - 30px);
+  padding: 10px;
+  box-sizing: border-box;
+  background-color: rgba(37,36,34,0.8);
+  opacity: 0.8;
+  border: inset 2px black;
+  
+}
+
+.load-status {
+  position: absolute;
+
+  background-color: rgba(0,0,0,0.3);
+  width: 30vw;
+  left: 10vw;
+  height: 40vh;
+  top:10vh;
+
+  color: white;
+  visibility: hidden;
+}
+
+.active {
+  visibility: visible;
 }

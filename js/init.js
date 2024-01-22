@@ -1,7 +1,7 @@
 import device_info from './device.js';
 import { begin_render_loop } from './taeca.js'
 
-import { ca_textures, rule_info, ruleset, view_info, view_info_bindgroup } from './shared_resources.js';
+import { ca_textures, read_mapped_ruleset, rule_info, ruleset, view_info, view_info_bindgroup } from './shared_resources.js';
 
 import initialize from './stages/initialize_ruleset.js';
 import iterate from './stages/iterate.js';
@@ -29,16 +29,19 @@ async function init() {
   })
 
   //#region Setup Shared Resources and Bindgroups
-  ca_textures.create();
-  rule_info.create();
-  ruleset.create(rule_info.local_resource.size);
-  view_info.create(canvas); //only needs canvas width for initialization
+  ca_textures.create(); // The pingpong textures that store our CA Grid
+  rule_info.create(); // Metadata about the rule (range, state count)
 
-  view_info_bindgroup.create_layout();
+  ruleset.create(rule_info.local_resource.size); // The rule is stored here
+  read_mapped_ruleset.create(rule_info.local_resource.size); // A version of the rule buffer used for reading
+
+  view_info.create(canvas); // Data about the view (zoom, origin, canvas size)
+
+  view_info_bindgroup.create_layout(); 
   //#endregion
 
   //#region Setup Initialize Stage (Resources, Bindgroups, Pipeline)
-  initialize.random_seeds.create();
+  initialize.random_seeds.create(); // The random seeds used to generate a random rule (I'm sorry you had to find out like this...)
 
   initialize.rule_info_bindgroup.create_layout(); // Bindgroup 0 
   initialize.random_seeds_bindgroup.create_layout(); // Bindgroup 1

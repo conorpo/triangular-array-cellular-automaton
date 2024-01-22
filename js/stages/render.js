@@ -59,7 +59,6 @@ export const color_map = {
     },
     update: function() {
         const new_colors = new Float32Array(4 * parseInt(import.meta.env.TCA_MAX_STATES));
-        console.log(color_map.local_resource)
 
         for(let i = 0; i < parseInt(import.meta.env.TCA_MAX_STATES); i++) {
             const color = color_map.local_resource[`COLOR_${i}`];

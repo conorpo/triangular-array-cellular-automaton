@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <script type="module" src="/js/init.js" defer></script>
+    <link rel="stylesheet" type="text/css" href="./assets/p22davinci_forward_macroman/stylesheet.css">
     <link rel="stylesheet" href="./style.css" />
 
     <title>TAECA</title>
@@ -12,12 +13,20 @@
   </head>
   <body>
     <div class="taeca-title">
-      <b>T. A. E. C. A.</b><br>
-      Triangular Array Elementary Cellular Automaton
+      <h1>T. A. E. C. A.</h1><br>
+      <h2>Triangular Array Elementary Cellular Automaton</h2>
       <a href="https://github.com/conorpo/triangular-array-cellular-automaton">
         <img src="./assets/github-mark-white.svg" alt="GitHub">
       </a>
-    </div>
+  </div>
     <canvas id="webgpu_canvas"></canvas>
+    <img id="loadingGif" src="./assets/tenor.gif" alt="" class="loading-gif">
+    <div id="ruleImportExport" class="rule-import-export">
+      <div id="ruleImportExportHeader" class="rule-import-export-header">
+        <h3>Rule Import/Export</h3>
+        <button id="closeRuleImportExport">X</button>
+      </div>
+      <textarea id="ruleTextarea" name="" id="" cols="30" rows="10" class="rule-textarea"></textarea>
+    </div>
   </body>
 </html>

@@ -4,12 +4,12 @@
  */
 
 import device_info from "./device.js";
-import { rule_info, ruleset, view_info_bindgroup, view_info, ca_textures } from "./shared_resources.js";
+import { rule_info, ruleset, view_info_bindgroup, view_info, ca_textures, read_mapped_ruleset } from "./shared_resources.js";
 
 import initialize_ruletset from "./stages/initialize_ruleset.js";
 import iterate from "./stages/iterate.js";
 import _render from "./stages/render.js";
-import debug_view from "./stages/debug_view.js";
+import debug_view, { vertex_buffer } from "./stages/debug_view.js";
 
 import { single_1 } from "./states.js";
 import Stats from "stats.js";
@@ -81,8 +81,8 @@ export function begin_render_loop(context, stats, gui) {
     };
 
     rule_info.update();
-    ca_textures.initialize_top_row(single_1(rule_info.local_resource.k, parseInt(import.meta.env.TCA_TEXTURE_WIDTH)));
-    set_rule(parseInt(import.meta.env.TCA_INITIAL_RULE_NUMBER));
+    change_top_row(single_1(rule_info.local_resource.k, parseInt(import.meta.env.TCA_TEXTURE_WIDTH)));
+    set_rule_number(BigInt(parseInt(import.meta.env.TCA_INITIAL_RULE_NUMBER)));
     _render.color_map.update();
 
     async function render() {  
@@ -166,26 +166,11 @@ export function begin_render_loop(context, stats, gui) {
 }
 
 /**
- * @function set_rule
- * @description Set the rule number. Expects the rule info buffer and ruleset buffer size to be up to date. 
- * @param {number} rule_number The rule number to set.
- * @todo This is very slow should only be used when ruleset buffer is small, until a new solution is created
- */
-export function set_rule(rule_number) {
-  for(let i = 0; rule_number > 0; i++) {
-    ruleset.local_resource[i] = rule_number % rule_info.local_resource.k;
-    rule_number = Math.floor(rule_number / rule_info.local_resource.k);
-  }
-  if(import.meta.env.DEV) console.log(ruleset.local_resource)
-
-  ruleset.update();
-}
-
-/**
  * @function new_rule
  * @description Create a new rule. Expects the rule info buffer and ruleset buffer size to be up to date.
  */
 export function new_rule () {
+  if(import.meta.env.DEV) console.log("New Rule");
   // Update the random seeds () 
   initialize_ruletset.random_seeds.update();
   
@@ -201,33 +186,117 @@ export function new_rule () {
   compute_pass.dispatchWorkgroups(workgroups);
   
   compute_pass.end();
-  
+
   const commandBuffer = encoder.finish();
   device_info.device.queue.submit([commandBuffer]);
+  
+  iterate.iterate_settings.local_resource.current_row = 0;
+  iterate.iterate_settings.update();
+}
+
+/**
+ * @function get_rule_number
+ * @description Get the rule number by copying from the ruleset buffer. VERY SLOW BECAUSE OF BigInt
+ */
+export async function get_rule_number () {
+  const encoder = device_info.device.createCommandEncoder({label: 'Export Rule Command Encoder'});
+  encoder.copyBufferToBuffer(ruleset.webgpu_resource, 0, read_mapped_ruleset.webgpu_resource, 0, ruleset.webgpu_resource.size);
+  device_info.device.queue.submit([encoder.finish()]);
+
+  await read_mapped_ruleset.webgpu_resource.mapAsync(GPUMapMode.READ);
+
+  const local_ruleset = new Uint32Array(read_mapped_ruleset.webgpu_resource.getMappedRange().slice(0)).reverse();
+  read_mapped_ruleset.webgpu_resource.unmap();
+
+  const base = BigInt(rule_info.local_resource.k);
+  // local_ruleset.reduce((acc, cur, i) => acc * base + BigInt(cur), 0n);
+  // This shit is so huge it breaks the textarea element
+  // Speed up:
+  return local_ruleset.reduce((acc, cur, i) => {
+    acc.condensed = acc.condensed * rule_info.local_resource.k + cur;
+    if(i % 20 === 19 || i === local_ruleset.length - 1) {
+      acc.total *= base ** BigInt(i % 20 + 1);
+      acc.total += BigInt(acc.condensed);
+      acc.condensed = 0;
+    }
+    if(i % 100000 === 99999) console.log(i, local_ruleset.length);
+    return acc;
+  }, {total: 0n, condensed: 0}).total;
+}
+
+
+/**
+ * @function set_rule
+ * @description Set the rule number. Expects the rule info buffer and ruleset buffer size to be up to date. 
+ * @param {bigint} rule_number - The Rule Number to Set
+ */
+export async function set_rule_number(rule_number) {
+  const k = BigInt(rule_info.local_resource.k);
+  const r = BigInt(rule_info.local_resource.r);
+
+  const MAX_RULE_NUMBER = k ** (k ** (2n * r));
+
+  if(rule_number >= MAX_RULE_NUMBER) throw Error("Invalid Rule Number, over the max possible rule for these values of r and k.");
+
+  const condensedBase = k ** (20n);
+
+  let i = 0;
+  while(rule_number >= 0n && i < rule_info.local_resource.size) {
+    if(i%100000 === 99999) console.log(i, rule_info.local_resource.size);
+    let condensed = Number(rule_number % condensedBase)
+    rule_number /= condensedBase;
+
+    for(let j = 0; j < 20 && i + j < rule_info.local_resource.size; j++) {
+      ruleset.local_resource[i+j] = condensed % rule_info.local_resource.k;
+      condensed -= ruleset.local_resource[i+j];
+      condensed /= rule_info.local_resource.k;
+    }
+
+    i += 20;
+  }
+
+  ruleset.update();
 
   iterate.iterate_settings.local_resource.current_row = 0;
   iterate.iterate_settings.update();
- 
 }
+
 
 /**
  * @function attempt_rule_info_update
  * @description Attempt to update the rule info buffer and ruleset buffer size.
  * @return {boolean} True if the update was successful, false otherwise.
  */
-export function attempt_rule_info_update () {
+export function attempt_rule_info_update (k_changed) {
   // First see if we can allocate a buffer of the new size
   if (!ruleset.create(rule_info.local_resource.size)) return false;
+
+  // Create the read_mapped_ruleset buffer
+  read_mapped_ruleset.create(rule_info.local_resource.size);
   
   // If so, update the rule info buffer and generate a new rule
   rule_info.update();
   new_rule();
+  
+  // Also update the debug vertex buffer
+  vertex_buffer.update(rule_info.local_resource.r);
+
+  // If k has changed we should also re-generate the top row
+  if(k_changed) change_top_row()
 
   return true;
+}
 
+export function change_top_row () {
+  ca_textures.update();
+  iterate.iterate_settings.local_resource.current_row = 0;
+  iterate.iterate_settings.update();
 }
 
 export default {
     new_rule,
-    attempt_rule_info_update
+    attempt_rule_info_update,
+    change_top_row,
+    get_rule_number,
+    set_rule_number
 }

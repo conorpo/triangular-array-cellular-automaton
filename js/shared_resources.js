@@ -4,6 +4,7 @@ import { vertex_buffer } from './stages/debug_view.js';
 import { rule_info_bindgroup as init_rule_info_bindgroup } from './stages/initialize_ruleset.js';
 import { rule_info_bindgroup as iterate_rule_info_bindgroup, pingpong_bindgroups }from './stages/iterate.js';
 import { texture_bindgroup } from './stages/render.js';
+import { random_state, single_1 } from './states.js';
 /**
  * @module SharedResources
  * @namespace SharedResources
@@ -35,7 +36,8 @@ const ca_texture_descriptor = {
 
 /**
  * @typedef {Object} CATexturesResourceContainer
- * @property {Initialize} initialize_top_row A function that initializes the top row of CA texture [0].
+ * @property {Initialize} update A function that initializes the top row of CA texture [0].
+ * @property {Object} local_resource Just stores the current initialization function.
  * @memberof SharedResources
  */
 /** 
@@ -43,6 +45,10 @@ const ca_texture_descriptor = {
  */
 export const ca_textures = {
     webgpu_resource: null,
+    local_resource: {
+        top_row_initialization: 'Single k-1',
+        top_row_buffer: new Uint32Array(ca_width),
+    },
     create: function() {
         this.webgpu_resource?.forEach(texture => texture.destroy());
 
@@ -52,18 +58,18 @@ export const ca_textures = {
         pingpong_bindgroups.dirty = true;
         texture_bindgroup.dirty = true;
     },
-    initialize_top_row: function(value_generator) {
-        const top_row_buffer = new Uint32Array(ca_width);
-        
-        for(let i = 0; i < top_row_buffer.length; i++) {
-            top_row_buffer[i] = value_generator(i);
+    update: function() {
+        const value_generator = (this.local_resource.top_row_initialization === 'Single k-1') ? single_1(rule_info.local_resource.k, ca_width) : random_state(rule_info.local_resource.k);
+
+        for(let i = 0; i < this.local_resource.top_row_buffer.length; i++) {
+            this.local_resource.top_row_buffer[i] = value_generator(i);
         }
 
-        if(import.meta.env.DEV) console.log(top_row_buffer);
+        if(import.meta.env.DEV) console.log("New Top Row Buffer: ", this.local_resource.top_row_buffer);
 
         device_info.device.queue.writeTexture({
             texture: this.webgpu_resource[0],
-        }, top_row_buffer, {}, {
+        }, this.local_resource.top_row_buffer, {}, {
             width: ca_width,
             height: 1,
         });
@@ -119,16 +125,6 @@ export const rule_info = {
         iterate_rule_info_bindgroup.dirty = true;
     },
     update: function() {
-        try {
-            ruleset.create(this.local_resource.size);
-        } catch (e) {
-            console.error(e);
-            return;
-        }
-
-        // Also update the debug vertex buffer
-        vertex_buffer.update(this.local_resource.r);
-
         device_info.device.queue.writeBuffer(this.webgpu_resource, 0, new Uint32Array([this.local_resource.r, this.local_resource.k]));
     }
 }
@@ -162,7 +158,7 @@ export const ruleset = {
         this.webgpu_resource = device_info.device.createBuffer({
             label: "Ruleset Buffer",
             size: size,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
         });
 
         init_rule_info_bindgroup.dirty = true;
@@ -181,6 +177,31 @@ export const ruleset = {
     }
 }
 //#endregion
+
+
+
+//#region Read Mapped Rule Set Resource
+
+
+
+/**
+ * @type {import('./types.js').ResourceContainer}
+ */
+export const read_mapped_ruleset = {
+    webgpu_resource: null,
+    create: function(size) {
+        // Check if the size is valid
+        if (size > device_info.device.limits.maxStorageBufferBindingSize) return false;
+        this.webgpu_resource?.destroy();
+        this.webgpu_resource = device_info.device.createBuffer({
+            label: "Staging Ruleset Buffer",
+            size: size,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        });
+
+        return true;
+    }
+}
 
 
 
